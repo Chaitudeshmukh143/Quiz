@@ -23,6 +23,7 @@ export default function Quiz() {
   const [submissionReason, setSubmissionReason] = useState("");
   const [timeLeft, setTimeLeft] = useState(QUIZ_DURATION_SECONDS);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [cameraPreviewReady, setCameraPreviewReady] = useState(false);
 
   const score = useMemo(() => {
     return questions.reduce((total, question) => {
@@ -97,6 +98,11 @@ export default function Quiz() {
       return;
     }
 
+    if (!cameraPreviewReady) {
+      setCameraError("Please wait for the camera preview to load before starting the quiz.");
+      return;
+    }
+
     setTimeLeft(QUIZ_DURATION_SECONDS);
     setQuizStarted(true);
     setCameraError("");
@@ -111,6 +117,11 @@ export default function Quiz() {
       nextStatus === "Camera unavailable"
     ) {
       setCameraEnabled(false);
+      setCameraPreviewReady(false);
+      setQuizStarted(false);
+    }
+
+    if (nextStatus === "Face detection unavailable") {
       setQuizStarted(false);
     }
   };
@@ -208,6 +219,7 @@ export default function Quiz() {
               className="primary-btn"
               onClick={() => {
                 setCameraEnabled(true);
+                setCameraPreviewReady(false);
                 setCameraError("");
               }}
             >
@@ -220,6 +232,9 @@ export default function Quiz() {
           <p className="helper-text">
             Questions will appear only after camera access is allowed and the quiz is started.
           </p>
+          {cameraEnabled && !cameraPreviewReady ? (
+            <p className="helper-text">Opening camera preview...</p>
+          ) : null}
           {cameraError && <p className="error-text">{cameraError}</p>}
         </section>
       )}
@@ -344,9 +359,11 @@ export default function Quiz() {
             {cameraEnabled && !quizSubmitted ? (
               <WebcamMonitor
                 enabled={cameraEnabled && !quizSubmitted}
+                monitoringActive={quizStarted && !quizSubmitted}
                 onError={setCameraError}
                 onReady={() => {
                   setCameraEnabled(true);
+                  setCameraPreviewReady(true);
                   setCameraError("");
                 }}
                 onStatusChange={handleProctorStatusChange}

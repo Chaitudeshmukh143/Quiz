@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { PROCTORING_STATUS, ProctoringService } from "../services/ProctoringService";
 
 const STATUS_VARIANTS = {
+  [PROCTORING_STATUS.CAMERA_READY]: "ok",
+  [PROCTORING_STATUS.DETECTOR_ERROR]: "danger",
   [PROCTORING_STATUS.READY]: "ok",
   [PROCTORING_STATUS.NO_FACE]: "danger",
   [PROCTORING_STATUS.MULTIPLE_FACES]: "warn",
@@ -14,6 +16,7 @@ const STATUS_VARIANTS = {
 
 export default function WebcamMonitor({
   enabled,
+  monitoringActive,
   onViolation,
   onReady,
   onError,
@@ -40,13 +43,21 @@ export default function WebcamMonitor({
     });
 
     serviceRef.current = service;
-    service.start().catch(() => {});
+    service.startCamera().catch(() => {});
 
     return () => {
       service.stop();
       serviceRef.current = null;
     };
   }, [enabled, onError, onReady, onStatusChange, onViolation]);
+
+  useEffect(() => {
+    if (!enabled || !monitoringActive || !serviceRef.current) {
+      return;
+    }
+
+    serviceRef.current.startMonitoring().catch(() => {});
+  }, [enabled, monitoringActive]);
 
   const statusVariant = STATUS_VARIANTS[status] ?? "neutral";
 

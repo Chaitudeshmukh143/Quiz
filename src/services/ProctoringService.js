@@ -14,6 +14,8 @@ const VIOLATION_COOLDOWN_MS = 6000;
 export const PROCTORING_STATUS = {
   IDLE: "Idle",
   INITIALIZING: "Initializing",
+  CAMERA_READY: "Camera ready",
+  DETECTOR_ERROR: "Face detection unavailable",
   READY: "Face detected",
   NO_FACE: "No face detected",
   MULTIPLE_FACES: "Multiple faces detected",
@@ -67,22 +69,44 @@ export class ProctoringService {
     this.permissionState = "pending";
   }
 
-  async start() {
+  async startCamera() {
     try {
       this.onStatusChange?.(PROCTORING_STATUS.INITIALIZING);
       await this.setupCamera();
-      await this.setupDetector();
-
-      this.lastFaceSeenAt = Date.now();
-      this.intervalId = window.setInterval(() => {
-        this.runDetection();
-      }, this.intervalMs);
-
+      this.onStatusChange?.(PROCTORING_STATUS.CAMERA_READY);
       this.onReady?.();
     } catch (error) {
-      this.handleStartupError(error);
+      this.handleCameraError(error);
       throw error;
     }
+  }
+
+  async startMonitoring() {
+    try {
+      if (!this.stream) {
+        await this.startCamera();
+      }
+
+      if (!this.faceDetector) {
+        await this.setupDetector();
+      }
+
+      this.lastFaceSeenAt = Date.now();
+      this.startDetectionLoop();
+    } catch (error) {
+      this.handleDetectorError(error);
+      throw error;
+    }
+  }
+
+  startDetectionLoop() {
+    if (this.intervalId) {
+      return;
+    }
+
+    this.intervalId = window.setInterval(() => {
+      this.runDetection();
+    }, this.intervalMs);
   }
 
   async setupCamera() {
@@ -228,7 +252,7 @@ export class ProctoringService {
     });
   }
 
-  handleStartupError(error) {
+  handleCameraError(error) {
     if (this.permissionState === "denied") {
       this.onStatusChange?.(PROCTORING_STATUS.CAMERA_DENIED);
       this.onError?.(
@@ -239,8 +263,15 @@ export class ProctoringService {
 
     this.onStatusChange?.(PROCTORING_STATUS.CAMERA_ERROR);
     this.onError?.(
+      error?.message || "Unable to access the camera. Please refresh and try again."
+    );
+  }
+
+  handleDetectorError(error) {
+    this.onStatusChange?.(PROCTORING_STATUS.DETECTOR_ERROR);
+    this.onError?.(
       error?.message ||
-        "Unable to initialize camera or face detection. Please refresh and try again."
+        "Face detection could not start. Camera is ready, but proctoring models failed to load."
     );
   }
 
